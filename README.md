@@ -35,7 +35,7 @@ Lovable (Frontend)
   "summary": "..."
 }
 
-
+"" 
 
 ## Setup (Self-hosted n8n)
 1) Run n8n with Docker
@@ -47,7 +47,7 @@ Fill in your values
 Run:
 
 docker compose up -d
-## 2) Import workflow
+ 2) Import workflow
 
 Open n8n editor
 
@@ -61,7 +61,7 @@ Gemini API key (Google AI Studio)
 
 Telegram bot token (optional)
 
-## 3) Expose webhook (ngrok)
+ 3) Expose webhook (ngrok)
 ngrok http 5678
 
 Update your webhook URL in Lovable to use the ngrok domain.
