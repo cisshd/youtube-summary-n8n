@@ -34,8 +34,7 @@ Lovable (Frontend)
   "ok": true,
   "summary": "..."
 }
-
-"" 
+```
 
 ## Setup (Self-hosted n8n)
 1) Run n8n with Docker
