@@ -1,0 +1,552 @@
+{
+  "name": "AI-powered YouTube video summarization & analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ytube",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "9320d08a-4868-4103-abdf-3f8f54a7a0a0",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        368,
+        240
+      ],
+      "webhookId": "9024e29e-9080-4cf5-9a6b-0d918468f195",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "transcript",
+        "options": {}
+      },
+      "id": "ff3c0fd1-36d8-4d64-b405-0600efd4d93b",
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "position": [
+        576,
+        512
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{\n{\n  ok: true,\n  summary: $json.summary,\n  id: $json.id,\n  youtubeUrl: $json.youtubeUrl\n}\n}}",
+        "options": {}
+      },
+      "id": "423276e0-81bf-487a-bbdd-26e9b84fa755",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1680,
+        512
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "chatId": "1122762467",
+        "text": "={{$json.telegramText}}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "27344649-8029-48ae-867b-7363d904fc59",
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "position": [
+        2192,
+        512
+      ],
+      "typeVersion": 1.2,
+      "webhookId": "c6e666dc-6a07-4a3c-b0d5-dcf09322e2d7",
+      "credentials": {
+        "telegramApi": {
+          "id": "57TAccLdTLRzS51o",
+          "name": "Telegram account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3ee42e4c-3cee-4934-97e7-64c96b5691ed",
+              "name": "youtubeUrl",
+              "type": "string",
+              "value": "={{ $json.url ?? $json.body?.url ?? $json.query?.url ?? $json.youtubeUrl ?? $json.body?.youtubeUrl ?? $json.query?.youtubeUrl }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "230c0325-d22a-4070-9460-748a6fef48d5",
+      "name": "Get YouTube URL",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        576,
+        240
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1) Read URL from multiple possible locations\nconst payload = items?.[0]?.json ?? {};\n\nconst youtubeUrl =\n  payload.url ??\n  payload.youtubeUrl ??\n  payload.body?.url ??\n  payload.body?.youtubeUrl ??\n  payload.query?.url ??\n  payload.query?.youtubeUrl ??\n  null;\n\n// 2) Validate URL\nif (typeof youtubeUrl !== 'string' || youtubeUrl.trim() === '') {\n  throw new Error(\n    `YouTube URL is missing. I received this JSON: ${JSON.stringify(payload)}`\n  );\n}\n\n// 3) Extract videoId safely\nconst extractYoutubeId = (url) => {\n  if (typeof url !== 'string') return null;\n\n  const pattern =\n    /(?:youtube\\.com\\/(?:[^\\/]+\\/.+\\/|(?:v|e(?:mbed)?)\\/|.*[?&]v=)|youtu\\.be\\/)([^\"&?\\/\\s]{11})/;\n\n  const match = url.match(pattern);\n  return match ? match[1] : null;\n};\n\nconst videoId = extractYoutubeId(youtubeUrl);\n\nif (!videoId) {\n  throw new Error(`Could not extract videoId from URL: ${youtubeUrl}`);\n}\n\nreturn [{ json: { videoId, youtubeUrl } }];"
+      },
+      "id": "420e90c3-9dfa-4f41-825a-9874b5ebe43a",
+      "name": "YouTube Video ID",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        768,
+        240
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "get",
+        "videoId": "={{ $json.videoId }}",
+        "options": {}
+      },
+      "id": "a4171c3e-1ff2-40de-af7f-b3971a1ebe79",
+      "name": "Get YouTube Video",
+      "type": "n8n-nodes-base.youTube",
+      "position": [
+        240,
+        1856
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "6I1sXmj72Q1tbifk",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "73e6bfc5-8b62-4880-acd4-292f2f692540",
+      "name": "gpt-4o-mini",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [
+        688,
+        1856
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "openAiApi": {
+          "id": "NeQNTWyUjMwGU8Fe",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Please analyze the given text and create a structured summary following these guidelines:\n\n1. Break down the content into main topics using Level 2 headers (##)\n2. Under each header:\n   - List only the most essential concepts and key points\n   - Use bullet points for clarity\n   - Keep explanations concise\n   - Preserve technical accuracy\n   - Highlight key terms in bold\n3. Organize the information in this sequence:\n   - Definition/Background\n   - Main characteristics\n   - Implementation details\n   - Advantages/Disadvantages\n4. Format requirements:\n   - Use markdown formatting\n   - Keep bullet points simple (no nesting)\n   - Bold important terms using **term**\n   - Use tables for comparisons\n   - Include relevant technical details\n\nPlease provide a clear, structured summary that captures the core concepts while maintaining technical accuracy.\n\nHere is the text: {{ $json.concatenated_text\n }}"
+      },
+      "id": "ea14e296-b30c-46f7-b283-746822ae1af4",
+      "name": "Summarize & Analyze Transcript",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [
+        672,
+        1712
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "fieldsToSummarize": {
+          "values": [
+            {
+              "aggregation": "concatenate",
+              "field": "transcript",
+              "separateBy": " "
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "90e3488f-f854-483e-9106-a5760d0c0457",
+      "name": "Concatenate",
+      "type": "n8n-nodes-base.summarize",
+      "position": [
+        768,
+        512
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bf132004-6636-411f-9d85-0c696fda84c4",
+              "name": "summary",
+              "type": "string",
+              "value": "={{$json.candidates[0].content.parts[0].text}}"
+            },
+            {
+              "id": "d0594232-cb39-453c-b015-3b039c098e1f",
+              "name": "id",
+              "type": "string",
+              "value": "={{$json.videoId}}"
+            },
+            {
+              "id": "17b6ca08-ce89-4467-bd25-0d2d182f7a8b",
+              "name": "youtubeUrl",
+              "type": "string",
+              "value": "={{$json.youtubeUrl}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9c5c249c-5eeb-4433-ba93-ace4611f4858",
+      "name": "Response Object",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        1424,
+        512
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "88042023-df2e-426d-b58e-e5999d46d600",
+              "leftValue": "={{$json.transcript}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {
+          "ignoreCase": false
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1824,
+        240
+      ],
+      "id": "83bfc5eb-d2b6-499d-8068-09955cf5ba72",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "videoId": "={{$json.videoId}}"
+      },
+      "type": "@donlovett/n8n-nodes-youtube-transcript.youTubeTranscript",
+      "typeVersion": 1,
+      "position": [
+        464,
+        1856
+      ],
+      "id": "6ac1c4fd-062b-469d-a4d5-dd81f8c1bf83",
+      "name": "YouTube Transcript"
+    },
+    {
+      "parameters": {
+        "url": "https://youtube-transcript3.p.rapidapi.com/api/transcript",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "videoId",
+              "value": "={{$json.videoId}}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-RapidAPI-Key",
+              "value": "f1fa9d5f95mshbee5a9a246933a7p17ac7cjsn28bf8320122a"
+            },
+            {
+              "name": "X-RapidAPI-Host",
+              "value": "youtube-transcript3.p.rapidapi.com"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        976,
+        240
+      ],
+      "id": "93b47d7d-cb8e-407f-b769-9c03c2a7c2ce",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const transcriptArray = $json.transcript || $json.data || [];\n\nconst text = Array.isArray(transcriptArray)\n  ? transcriptArray.map(x => x.text).join(' ')\n  : '';\n\nreturn [{ json: { transcript: text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        240
+      ],
+      "id": "e2019c6b-3dbf-47bb-8e70-eb1591b59bac",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AIzaSyAbyQ6R1uzn6S2hGZQeXIE4O4MscjvBU7E",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    contents: [\n      {\n        parts: [\n          {\n            text: \"Summarize this transcript in structured markdown:\\n\\n\" + ($json.concatenated_transcript ?? \"\")\n          }\n        ]\n      }\n    ]\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1200,
+        512
+      ],
+      "id": "766654eb-6911-439e-9ba3-87295abd3a46",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    ...$json,\n    concatenated_transcript: ($json.concatenated_transcript ?? '').slice(0, 12000)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        976,
+        512
+      ],
+      "id": "3d0de3bc-d1de-4a80-acc7-0a94b5a1c123",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = ($json.summary ?? \"\").toString();\n\n// Telegram max ~4096 chars. نخليها 3800 عشان مساحة تنسيق\nconst maxLen = 3800;\n\nconst clipped =\n  text.length > maxLen ? text.slice(0, maxLen) + \"\\n\\n(…تكملة في Lovable/Webhook)\" : text;\n\nreturn [{ json: { ...$json, telegramText: clipped } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        512
+      ],
+      "id": "d7c9e9b8-4972-4f60-b653-56fecf378da6",
+      "name": "Code in JavaScript2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get YouTube URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Concatenate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Concatenate": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "gpt-4o-mini": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Summarize & Analyze Transcript",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get YouTube URL": {
+      "main": [
+        [
+          {
+            "node": "YouTube Video ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Response Object": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube Video ID": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize & Analyze Transcript": {
+      "main": [
+        []
+      ]
+    },
+    "Get YouTube Video": {
+      "main": [
+        []
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "YouTube Transcript": {
+      "main": [
+        []
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Response Object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "23c90ef5-be52-492c-b913-8113d5c088b6",
+  "meta": {
+    "templateId": "2679",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c53f3e9acc496b6358d277db0e6a9af1f11dd561b10ee5573a8aae4ea399910b"
+  },
+  "id": "OEezLY922O0lbi8Wk63r0",
+  "tags": []
+}
